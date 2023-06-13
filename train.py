@@ -290,23 +290,25 @@ def plot_images():
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Train AcerNet on Fer2013")
 
     parser.add_argument("--dataset-path", type=str, help="Path to the dataset")
-    parser.add_argument("--output-dir", type=str, default="out", help="Path where to save log files and best model")
-    parser.add_argument("--epochs", type=int, default=20, help="Number of epochs of training")
-    parser.add_argument("--batch-size", type=int, default=32, help="Size of the batches")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Adam: learning rate")
-    parser.add_argument("--channels", type=int, default=1, help="Image channels")
-    parser.add_argument('--amp', action='store_true', default=False, help='Use mixed precision')
+    parser.add_argument("--output-dir", type=str, default="out",
+                        help="Path where the best model will be saved")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for training")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument('--amp', action='store_true', default=False, help='Enable mixed precision training')
     parser.add_argument('--in_22k', action='store_true', default=False)
-    parser.add_argument('--gradient-accumulation-steps', type=int, default=1, help='Gradient accumulation steps')
+    parser.add_argument('--gradient-accumulation-steps', type=int, default=1,
+                        help='Number of steps to accumulate gradients before updating the model weights')
     parser.add_argument("--num-workers", type=int, default=0,
                         help="The number of subprocesses to use for data loading."
                              "0 means that the data will be loaded in the main process.")
-    parser.add_argument('--checkpoint', type=str, default=None, help='Path to checkpoint file')
+    parser.add_argument('--checkpoint', type=str, default=None,
+                        help='Path to the checkpoint file for resuming training or performing inference')
     parser.add_argument('--model-size', choices=['tiny', 'small', 'base', 'large', 'xlarge'], default='tiny',
-                        help='Choose size: tiny, base, or large')
+                        help='Choose the size of the model: tiny, small, base, large, or xlarge')
 
     opt = parser.parse_args()
     print(opt)
