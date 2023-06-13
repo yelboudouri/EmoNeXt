@@ -13,6 +13,7 @@ pip install -r requirements.txt
 
 4. Download the data and run training:
 ```bash
+python scripts/download_dataset.py
 python train.py \
     --dataset-path='FER2013' \
     --batch-size=64 --lr=0.0001 \
