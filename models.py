@@ -129,7 +129,7 @@ class Block(nn.Module):
         return x
 
 
-class ConvNeXt(nn.Module):
+class EmoNeXt(nn.Module):
 
     def __init__(self, in_chans=3, num_classes=1000,
                  depths=None, dims=None, drop_path_rate=0.,
@@ -258,7 +258,7 @@ def get_model(num_classes, model_size='tiny', in_22k=False):
     if in_22k:
         default_num_classes = 21841
 
-    net = ConvNeXt(
+    net = EmoNeXt(
         depths=depths,
         dims=dims,
         num_classes=default_num_classes,

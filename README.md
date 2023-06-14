@@ -1,4 +1,4 @@
-# AcerNet: an Adapted ConvNeXt for facial Emotion Recognition
+# EmoNeXt: an Adapted ConvNeXt for facial Emotion Recognition
 
 ## Quick start
 

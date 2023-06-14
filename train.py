@@ -1,5 +1,4 @@
 import argparse
-import math
 import random
 import sys
 from datetime import datetime
@@ -9,15 +8,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchvision
+import wandb
 from ema_pytorch import EMA
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from tqdm import tqdm
 
-import wandb
 from models import get_model
+from scheduler import CosineAnnealingWithWarmRestartsLR
 
 seed = 2001
 torch.manual_seed(seed)
@@ -26,35 +25,6 @@ random.seed(seed)
 np.random.seed(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-
-
-class CosineAnnealingWithWarmRestartsLR(LRScheduler):
-
-    def __init__(self, optimizer, warmup_steps, cycle_steps, min_lr=0, max_lr=1e-3):
-        self.optimizer = optimizer
-        self.warmup_steps = warmup_steps
-        self.cycle_steps = cycle_steps
-        self.min_lr = min_lr
-        self.max_lr = max_lr
-
-        self.steps_counter = 0
-
-        super().__init__(optimizer)
-
-    def step(self, epoch=None):
-        self.steps_counter += 1
-
-        current_cycle_steps = self.steps_counter % self.cycle_steps
-
-        if current_cycle_steps < self.warmup_steps:
-            current_lr = self.min_lr + (self.max_lr - self.min_lr) * current_cycle_steps / self.warmup_steps
-        else:
-            current_lr = self.min_lr + (self.max_lr - self.min_lr) * \
-                         (1 + math.cos(math.pi * (current_cycle_steps - self.warmup_steps) /
-                                       (self.cycle_steps - self.warmup_steps))) / 2
-
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = current_lr
 
 
 class Trainer:
@@ -290,7 +260,7 @@ def plot_images():
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Train AcerNet on Fer2013")
+    parser = argparse.ArgumentParser(description="Train EmoNeXt on Fer2013")
 
     parser.add_argument("--dataset-path", type=str, help="Path to the dataset")
     parser.add_argument("--output-dir", type=str, default="out",
@@ -314,9 +284,9 @@ if __name__ == '__main__':
     print(opt)
 
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    exec_name = f"AcerNet_{opt.model_size}_{current_time}"
+    exec_name = f"EmoNeXt_{opt.model_size}_{current_time}"
 
-    wandb.init(project="AcerNet", name=exec_name, anonymous="must")
+    wandb.init(project="EmoNeXt", name=exec_name, anonymous="must")
 
     train_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(),
