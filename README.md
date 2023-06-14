@@ -22,3 +22,7 @@ python train.py \
     --in_22k \
     --num-workers=1 \
     --model-size='tiny'
+```
+
+## Comments
+Our codebase builds heavily on Facebook's [ConvNeXt](https://github.com/facebookresearch/ConvNeXt). Thanks for open-sourcing!
