@@ -42,7 +42,7 @@ print("Preparing dataset..")
 with tarfile.open('fer2013.tar.gz', 'r') as tar:
     tar.extractall('fer2013')
 
-output_folder_path = '../FER2013'
+output_folder_path = 'FER2013'
 
 # Load the CSV file into a Pandas DataFrame
 df = pd.read_csv('fer2013/fer2013/fer2013.csv')

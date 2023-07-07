@@ -8,13 +8,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchvision
-import wandb
 from ema_pytorch import EMA
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from tqdm import tqdm
 
+import wandb
 from models import get_model
 from scheduler import CosineAnnealingWithWarmRestartsLR
 
@@ -33,7 +33,7 @@ class Trainer:
                  training_dataloader,
                  validation_dataloader,
                  testing_dataloader,
-                 num_classes,
+                 classes,
                  output_dir,
                  max_epochs: int = 10000,
                  early_stopping_patience: int = 12,
@@ -52,7 +52,8 @@ class Trainer:
         self.validation_dataloader = validation_dataloader
         self.testing_dataloader = testing_dataloader
 
-        self.num_classes = num_classes
+        self.classes = classes
+        self.num_classes = len(classes)
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print("Device used: " + self.device.type)
@@ -84,12 +85,18 @@ class Trainer:
     def run(self):
         counter = 0  # Counter for epochs with no validation loss improvement
 
+        images, _ = next(iter(self.training_dataloader))
+        images = [transforms.ToPILImage()(image) for image in images]
+        wandb.log({
+            'Images': [wandb.Image(image) for image in images]
+        })
+
         for epoch in range(self.epochs):
             print("[Epoch: %d/%d]" % (epoch + 1, self.epochs))
 
+            self.visualize_stn()
             train_loss, train_accuracy = self.train_epoch()
             val_loss, val_accuracy = self.val_epoch()
-            # self.visualize_stn()
 
             wandb.log({'Train Loss': train_loss,
                        'Val Loss': val_loss,
@@ -154,7 +161,8 @@ class Trainer:
         self.model.eval()
 
         avg_loss = []
-        avg_accuracy = []
+        predicted_labels = []
+        true_labels = []
 
         pbar = tqdm(unit="batch", file=sys.stdout, total=len(self.validation_dataloader))
         for batch_idx, (inputs, labels) in enumerate(self.validation_dataloader):
@@ -164,22 +172,28 @@ class Trainer:
             with torch.autocast(self.device.type, enabled=self.amp):
                 predictions, _, loss = self.model(inputs, labels)
 
-            batch_accuracy = (predictions == labels).sum().item() / labels.size(0)
-
             avg_loss.append(loss.item())
-            avg_accuracy.append(batch_accuracy)
+            predicted_labels.extend(predictions.tolist())
+            true_labels.extend(labels.tolist())
 
             pbar.update(1)
 
         pbar.close()
 
-        print('Eval loss: %.4f, Eval Accuracy: %.4f %%' % (np.mean(avg_loss) * 1.0, np.mean(avg_accuracy) * 100.0))
-        return np.mean(avg_loss), np.mean(avg_accuracy) * 100.0
+        accuracy = torch.eq(torch.tensor(predicted_labels), torch.tensor(true_labels)).float().mean().item()
+        wandb.log({"confusion_matrix": wandb.plot.confusion_matrix(probs=None,
+                                                                   y_true=true_labels,
+                                                                   preds=predicted_labels,
+                                                                   class_names=self.classes)})
+
+        print('Eval loss: %.4f, Eval Accuracy: %.4f %%' % (np.mean(avg_loss) * 1.0, accuracy * 100.0))
+        return np.mean(avg_loss), accuracy * 100.0
 
     def test_model(self):
         self.ema.eval()
 
-        avg_accuracy = []
+        predicted_labels = []
+        true_labels = []
 
         pbar = tqdm(unit="batch", file=sys.stdout, total=len(self.testing_dataloader))
         for batch_idx, (inputs, labels) in enumerate(self.testing_dataloader):
@@ -194,28 +208,37 @@ class Trainer:
             outputs_avg = logits.view(bs, ncrops, -1).mean(1)
             predictions = torch.argmax(outputs_avg, dim=1)
 
-            batch_accuracy = (predictions == labels).sum().item() / labels.size(0)
-            avg_accuracy.append(batch_accuracy)
+            predicted_labels.extend(predictions.tolist())
+            true_labels.extend(labels.tolist())
 
             pbar.update(1)
 
         pbar.close()
 
-        print('Test Accuracy: %.4f %%' % (np.mean(avg_accuracy) * 100.0))
+        accuracy = torch.eq(torch.tensor(predicted_labels), torch.tensor(true_labels)).float().mean().item()
+        print('Test Accuracy: %.4f %%' % (accuracy * 100.0))
+
+        wandb.log({"confusion_matrix": wandb.plot.confusion_matrix(probs=None,
+                                                                   y_true=true_labels,
+                                                                   preds=predicted_labels,
+                                                                   class_names=self.classes)})
 
     def visualize_stn(self):
         self.model.eval()
 
-        batch = next(iter(self.training_dataloader))[0].to(self.device)
+        batch = torch.utils.data.Subset(val_dataset, range(32))
 
-        grid = torchvision.utils.make_grid(batch, nrow=8, padding=4)
-        transforms.ToPILImage()(grid).save(str(self.output_directory / 'grid_images.jpg'))
-
+        # Access the batch data
+        batch = torch.stack([batch[i][0] for i in range(len(batch))]).to(self.device)
         with torch.autocast(self.device.type, enabled=self.amp):
             stn_batch = self.model.stn(batch)
 
-        grid = torchvision.utils.make_grid(stn_batch, nrow=8, padding=4)
-        transforms.ToPILImage()(grid).save(str(self.output_directory / 'stn_images.jpg'))
+        to_pil = transforms.ToPILImage()
+
+        grid = to_pil(torchvision.utils.make_grid(batch, nrow=16, padding=4))
+        stn_batch = to_pil(torchvision.utils.make_grid(stn_batch, nrow=16, padding=4))
+
+        wandb.log({'batch': wandb.Image(grid), 'stn': wandb.Image(stn_batch)})
 
     def save(self):
         data = {
@@ -326,7 +349,7 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True,
                               num_workers=opt.num_workers)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     net = get_model(
         len(train_dataset.classes),
@@ -339,7 +362,7 @@ if __name__ == '__main__':
         training_dataloader=train_loader,
         validation_dataloader=val_loader,
         testing_dataloader=test_loader,
-        num_classes=len(train_dataset.classes),
+        classes=train_dataset.classes,
         execution_name=exec_name,
         lr=opt.lr,
         output_dir=opt.output_dir,

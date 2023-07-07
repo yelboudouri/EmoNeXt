@@ -5,3 +5,6 @@ numpy
 wandb
 tqdm
 ema_pytorch
+kaggle
+pillow
+pandas

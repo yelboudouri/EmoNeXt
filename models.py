@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.hub import load_state_dict_from_url
+from torchvision.models import vgg16_bn, VGG16_BN_Weights
 from torchvision.ops import StochasticDepth
 
 model_urls = {
@@ -270,3 +271,61 @@ def get_model(num_classes, model_size='tiny', in_22k=False):
     net.head = nn.Linear(dims[-1], num_classes)
 
     return net
+
+
+class Baseline(nn.Module):
+    def _init_(self, num_classes):
+        super().__init__()
+
+        # Spatial transformer localization-network
+        self.localization = nn.Sequential(
+            nn.Conv2d(3, 8, kernel_size=7),
+            nn.BatchNorm2d(8),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True),
+            nn.Conv2d(8, 10, kernel_size=5),
+            nn.BatchNorm2d(10),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True)
+        )
+
+        # Regressor for the 3 * 2 affine matrix
+        self.fc_loc = nn.Sequential(
+            nn.Linear(10 * 52 * 52, 32),
+            nn.ReLU(True),
+            nn.Linear(32, 3 * 2)
+        )
+
+        self.backbone = vgg16_bn(weights=VGG16_BN_Weights.DEFAULT)
+        self.head = nn.Linear(512, num_classes)
+
+        for m in self.modules():
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.trunc_normal_(m.weight, std=0.02)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+        self.fc_loc[2].weight.data.zero_()
+        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
+
+    def stn(self, x):
+        xs = self.localization(x)
+        xs = xs.view(-1, 10 * 52 * 52)
+        theta = self.fc_loc(xs)
+        theta = theta.view(-1, 2, 3)
+
+        grid = F.affine_grid(theta, x.size(), align_corners=True)
+        x = F.grid_sample(x, grid, align_corners=True)
+
+        return x
+
+    def forward(self, x, labels=None):
+        x = self.stn(x)
+        x = self.backbone.features(x)
+        logits = self.head(x)
+
+        if labels is not None:
+            loss = F.cross_entropy(logits, labels, label_smoothing=0.2)
+            return torch.argmax(logits, dim=1), logits, loss
+
+        return torch.argmax(logits, dim=1), logits
