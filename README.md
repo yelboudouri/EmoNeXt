@@ -35,12 +35,13 @@ Our codebase builds heavily on Facebook's [ConvNeXt](https://github.com/facebook
 ## Citation
 Please use the following bibtex entry:
 
-    @INPROCEEDINGS{10337732,
-      author={El Boudouri, Yassine and Bohi, Amine},
-      booktitle={2023 IEEE 25th International Workshop on Multimedia Signal Processing (MMSP)}, 
-      title={EmoNeXt: an Adapted ConvNeXt for Facial Emotion Recognition}, 
-      year={2023},
-      volume={},
-      number={},
-      pages={1-6},
-      doi={10.1109/MMSP59012.2023.10337732}}
+      @inproceedings{el2023emonext,
+        title={EmoNeXt: an Adapted ConvNeXt for Facial Emotion Recognition},
+        author={El Boudouri, Yassine and Bohi, Amine},
+        booktitle={2023 IEEE 25th International Workshop on Multimedia Signal Processing (MMSP)},
+        pages={1--6},
+        year={2023},
+        organization={IEEE}
+      }
+
+
