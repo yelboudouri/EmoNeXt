@@ -1,5 +1,7 @@
 # EmoNeXt: an Adapted ConvNeXt for facial Emotion Recognition
 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/emonext-an-adapted-convnext-for-facial/facial-expression-recognition-on-fer2013)](https://paperswithcode.com/sota/facial-expression-recognition-on-fer2013?p=emonext-an-adapted-convnext-for-facial)
+
 *This repository contains the code referenced in the paper: ["EmoNeXt: an Adapted ConvNeXt for facial Emotion Recognition"](https://ieeexplore.ieee.org/abstract/document/10337732).*
 
 ## Abstract
