@@ -28,7 +28,7 @@ class SELayer(nn.Module):
             nn.Linear(channel, channel // reduction, bias=False),
             nn.ReLU(inplace=True),
             nn.Linear(channel // reduction, channel, bias=False),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -64,7 +64,7 @@ class DotProductSelfAttention(nn.Module):
 
 
 class LayerNorm(nn.Module):
-    r""" LayerNorm that supports two data formats: channels_last (default) or channels_first.
+    r"""LayerNorm that supports two data formats: channels_last (default) or channels_first.
     The ordering of the dimensions in the inputs. channels_last corresponds to inputs with
     shape (batch_size, height, width, channels) while channels_first corresponds to inputs
     with shape (batch_size, channels, height, width).
@@ -82,7 +82,9 @@ class LayerNorm(nn.Module):
 
     def forward(self, x):
         if self.data_format == "channels_last":
-            return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+            return F.layer_norm(
+                x, self.normalized_shape, self.weight, self.bias, self.eps
+            )
         elif self.data_format == "channels_first":
             u = x.mean(1, keepdim=True)
             s = (x - u).pow(2).mean(1, keepdim=True)
@@ -92,7 +94,7 @@ class LayerNorm(nn.Module):
 
 
 class Block(nn.Module):
-    r""" ConvNeXt Block. There are two equivalent implementations:
+    r"""ConvNeXt Block. There are two equivalent implementations:
     (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
     (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
     We use (2) as we find it slightly faster in PyTorch
@@ -103,15 +105,22 @@ class Block(nn.Module):
         layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
 
-    def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6):
+    def __init__(self, dim, drop_path=0.0, layer_scale_init_value=1e-6):
         super().__init__()
-        self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)  # depthwise conv
+        self.dwconv = nn.Conv2d(
+            dim, dim, kernel_size=7, padding=3, groups=dim
+        )  # depthwise conv
         self.norm = LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, 4 * dim)  # pointwise/1x1 convs, implemented with linear layers
+        self.pwconv1 = nn.Linear(
+            dim, 4 * dim
+        )  # pointwise/1x1 convs, implemented with linear layers
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(4 * dim, dim)
-        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)),
-                                  requires_grad=True) if layer_scale_init_value > 0 else None
+        self.gamma = (
+            nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
+            if layer_scale_init_value > 0
+            else None
+        )
         self.stochastic_depth = StochasticDepth(drop_path, "row")
 
     def forward(self, x):
@@ -131,11 +140,15 @@ class Block(nn.Module):
 
 
 class EmoNeXt(nn.Module):
-
-    def __init__(self, in_chans=3, num_classes=1000,
-                 depths=None, dims=None, drop_path_rate=0.,
-                 layer_scale_init_value=1e-6,
-                 ):
+    def __init__(
+        self,
+        in_chans=3,
+        num_classes=1000,
+        depths=None,
+        dims=None,
+        drop_path_rate=0.0,
+        layer_scale_init_value=1e-6,
+    ):
         super().__init__()
 
         if dims is None:
@@ -152,37 +165,45 @@ class EmoNeXt(nn.Module):
             nn.Conv2d(8, 10, kernel_size=5),
             nn.BatchNorm2d(10),
             nn.MaxPool2d(2, stride=2),
-            nn.ReLU(True)
+            nn.ReLU(True),
         )
 
         # Regressor for the 3 * 2 affine matrix
         self.fc_loc = nn.Sequential(
-            nn.Linear(10 * 52 * 52, 32),
-            nn.ReLU(True),
-            nn.Linear(32, 3 * 2)
+            nn.Linear(10 * 52 * 52, 32), nn.ReLU(True), nn.Linear(32, 3 * 2)
         )
 
-        self.downsample_layers = nn.ModuleList()  # stem and 3 intermediate downsampling conv layers
+        self.downsample_layers = (
+            nn.ModuleList()
+        )  # stem and 3 intermediate downsampling conv layers
         stem = nn.Sequential(
             nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=4),
-            LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
+            LayerNorm(dims[0], eps=1e-6, data_format="channels_first"),
         )
         self.downsample_layers.append(stem)
         for i in range(3):
             downsample_layer = nn.Sequential(
                 LayerNorm(dims[i], eps=1e-6, data_format="channels_first"),
                 nn.Conv2d(dims[i], dims[i + 1], kernel_size=2, stride=2),
-                SELayer(dims[i + 1])
+                SELayer(dims[i + 1]),
             )
             self.downsample_layers.append(downsample_layer)
 
-        self.stages = nn.ModuleList()  # 4 feature resolution stages, each consisting of multiple residual blocks
+        self.stages = (
+            nn.ModuleList()
+        )  # 4 feature resolution stages, each consisting of multiple residual blocks
         dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
         cur = 0
         for i in range(4):
             stage = nn.Sequential(
-                *[Block(dim=dims[i], drop_path=dp_rates[cur + j],
-                        layer_scale_init_value=layer_scale_init_value) for j in range(depths[i])]
+                *[
+                    Block(
+                        dim=dims[i],
+                        drop_path=dp_rates[cur + j],
+                        layer_scale_init_value=layer_scale_init_value,
+                    )
+                    for j in range(depths[i])
+                ]
             )
             self.stages.append(stage)
             cur += depths[i]
@@ -198,7 +219,9 @@ class EmoNeXt(nn.Module):
                     nn.init.zeros_(m.bias)
 
         self.fc_loc[2].weight.data.zero_()
-        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
+        self.fc_loc[2].bias.data.copy_(
+            torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float)
+        )
 
     def stn(self, x):
         xs = self.localization(x)
@@ -215,7 +238,9 @@ class EmoNeXt(nn.Module):
         for i in range(4):
             x = self.downsample_layers[i](x)
             x = self.stages[i](x)
-        return self.norm(x.mean([-2, -1]))  # global average pooling, (N, C, H, W) -> (N, C)
+        return self.norm(
+            x.mean([-2, -1])
+        )  # global average pooling, (N, C, H, W) -> (N, C)
 
     def forward(self, x, labels=None):
         x = self.stn(x)
@@ -233,41 +258,54 @@ class EmoNeXt(nn.Module):
         return torch.argmax(logits, dim=1), logits
 
 
-def get_model(num_classes, model_size='tiny', in_22k=False):
-    if model_size == 'tiny':
+def get_model(num_classes, model_size="tiny", in_22k=False):
+    if model_size == "tiny":
         depths = [3, 3, 9, 3]
         dims = [96, 192, 384, 768]
-        url = model_urls['convnext_tiny_22k'] if in_22k else model_urls['convnext_tiny_1k']
-    elif model_size == 'small':
+        url = (
+            model_urls["convnext_tiny_22k"]
+            if in_22k
+            else model_urls["convnext_tiny_1k"]
+        )
+    elif model_size == "small":
         depths = [3, 3, 27, 3]
         dims = [96, 192, 384, 768]
-        url = model_urls['convnext_small_22k'] if in_22k else model_urls['convnext_small_1k']
-    elif model_size == 'base':
+        url = (
+            model_urls["convnext_small_22k"]
+            if in_22k
+            else model_urls["convnext_small_1k"]
+        )
+    elif model_size == "base":
         depths = [3, 3, 27, 3]
         dims = [128, 256, 512, 1024]
-        url = model_urls['convnext_base_22k'] if in_22k else model_urls['convnext_base_1k']
-    elif model_size == 'large':
+        url = (
+            model_urls["convnext_base_22k"]
+            if in_22k
+            else model_urls["convnext_base_1k"]
+        )
+    elif model_size == "large":
         depths = [3, 3, 27, 3]
         dims = [192, 384, 768, 1536]
-        url = model_urls['convnext_large_22k'] if in_22k else model_urls['convnext_large_1k']
+        url = (
+            model_urls["convnext_large_22k"]
+            if in_22k
+            else model_urls["convnext_large_1k"]
+        )
     else:
         depths = [3, 3, 27, 3]
         dims = [256, 512, 1024, 2048]
-        url = model_urls['convnext_xlarge_22k']
+        url = model_urls["convnext_xlarge_22k"]
 
     default_num_classes = 1000
     if in_22k:
         default_num_classes = 21841
 
     net = EmoNeXt(
-        depths=depths,
-        dims=dims,
-        num_classes=default_num_classes,
-        drop_path_rate=0.1
+        depths=depths, dims=dims, num_classes=default_num_classes, drop_path_rate=0.1
     )
 
     state_dict = load_state_dict_from_url(url=url)
-    net.load_state_dict(state_dict['model'], strict=False)
+    net.load_state_dict(state_dict["model"], strict=False)
     net.head = nn.Linear(dims[-1], num_classes)
 
     return net

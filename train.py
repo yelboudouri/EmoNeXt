@@ -28,24 +28,24 @@ torch.backends.cudnn.benchmark = False
 
 
 class Trainer:
-    def __init__(self,
-                 model,
-                 training_dataloader,
-                 validation_dataloader,
-                 testing_dataloader,
-                 classes,
-                 output_dir,
-                 max_epochs: int = 10000,
-                 early_stopping_patience: int = 12,
-                 execution_name=None,
-                 lr: float = 1e-4,
-                 amp: bool = False,
-                 ema_decay: float = 0.99,
-                 ema_update_every: int = 16,
-                 gradient_accumulation_steps: int = 1,
-                 checkpoint_path: str = None,
-                 ):
-
+    def __init__(
+        self,
+        model,
+        training_dataloader,
+        validation_dataloader,
+        testing_dataloader,
+        classes,
+        output_dir,
+        max_epochs: int = 10000,
+        early_stopping_patience: int = 12,
+        execution_name=None,
+        lr: float = 1e-4,
+        amp: bool = False,
+        ema_decay: float = 0.99,
+        ema_update_every: int = 16,
+        gradient_accumulation_steps: int = 1,
+        checkpoint_path: str = None,
+    ):
         self.epochs = max_epochs
 
         self.training_dataloader = training_dataloader
@@ -55,7 +55,7 @@ class Trainer:
         self.classes = classes
         self.num_classes = len(classes)
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Device used: " + self.device.type)
 
         self.amp = amp
@@ -65,8 +65,12 @@ class Trainer:
 
         self.optimizer = AdamW(model.parameters(), lr=lr)
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
-        self.scheduler = CosineAnnealingWithWarmRestartsLR(self.optimizer, warmup_steps=128, cycle_steps=1024)
-        self.ema = EMA(model, beta=ema_decay, update_every=ema_update_every).to(self.device)
+        self.scheduler = CosineAnnealingWithWarmRestartsLR(
+            self.optimizer, warmup_steps=128, cycle_steps=1024
+        )
+        self.ema = EMA(model, beta=ema_decay, update_every=ema_update_every).to(
+            self.device
+        )
 
         self.early_stopping_patience = early_stopping_patience
 
@@ -75,21 +79,19 @@ class Trainer:
 
         self.best_val_accuracy = 0
 
-        self.execution_name = 'model' if execution_name is None else execution_name
+        self.execution_name = "model" if execution_name is None else execution_name
 
         if checkpoint_path:
             self.load(checkpoint_path)
 
-        wandb.watch(model, log='all')
+        wandb.watch(model, log="all")
 
     def run(self):
         counter = 0  # Counter for epochs with no validation loss improvement
 
         images, _ = next(iter(self.training_dataloader))
         images = [transforms.ToPILImage()(image) for image in images]
-        wandb.log({
-            'Images': [wandb.Image(image) for image in images]
-        })
+        wandb.log({"Images": [wandb.Image(image) for image in images]})
 
         for epoch in range(self.epochs):
             print("[Epoch: %d/%d]" % (epoch + 1, self.epochs))
@@ -98,11 +100,15 @@ class Trainer:
             train_loss, train_accuracy = self.train_epoch()
             val_loss, val_accuracy = self.val_epoch()
 
-            wandb.log({'Train Loss': train_loss,
-                       'Val Loss': val_loss,
-                       'Train Accuracy': train_accuracy,
-                       'Val Accuracy': val_accuracy,
-                       'Epoch': epoch + 1})
+            wandb.log(
+                {
+                    "Train Loss": train_loss,
+                    "Val Loss": val_loss,
+                    "Train Accuracy": train_accuracy,
+                    "Val Accuracy": val_accuracy,
+                    "Epoch": epoch + 1,
+                }
+            )
 
             # Early stopping
             if val_accuracy > self.best_val_accuracy:
@@ -113,7 +119,9 @@ class Trainer:
                 counter += 1
                 if counter >= self.early_stopping_patience:
                     print(
-                        "Validation loss did not improve for %d epochs. Stopping training." % self.early_stopping_patience)
+                        "Validation loss did not improve for %d epochs. Stopping training."
+                        % self.early_stopping_patience
+                    )
                     break
 
         self.test_model()
@@ -150,7 +158,9 @@ class Trainer:
             avg_accuracy.append(batch_accuracy)
 
             # Update progress bar
-            pbar.set_postfix({'loss': np.mean(avg_loss), 'acc': np.mean(avg_accuracy) * 100.0})
+            pbar.set_postfix(
+                {"loss": np.mean(avg_loss), "acc": np.mean(avg_accuracy) * 100.0}
+            )
             pbar.update(1)
 
         pbar.close()
@@ -164,7 +174,9 @@ class Trainer:
         predicted_labels = []
         true_labels = []
 
-        pbar = tqdm(unit="batch", file=sys.stdout, total=len(self.validation_dataloader))
+        pbar = tqdm(
+            unit="batch", file=sys.stdout, total=len(self.validation_dataloader)
+        )
         for batch_idx, (inputs, labels) in enumerate(self.validation_dataloader):
             inputs = inputs.to(self.device)
             labels = labels.to(self.device)
@@ -180,13 +192,27 @@ class Trainer:
 
         pbar.close()
 
-        accuracy = torch.eq(torch.tensor(predicted_labels), torch.tensor(true_labels)).float().mean().item()
-        wandb.log({"confusion_matrix": wandb.plot.confusion_matrix(probs=None,
-                                                                   y_true=true_labels,
-                                                                   preds=predicted_labels,
-                                                                   class_names=self.classes)})
+        accuracy = (
+            torch.eq(torch.tensor(predicted_labels), torch.tensor(true_labels))
+            .float()
+            .mean()
+            .item()
+        )
+        wandb.log(
+            {
+                "confusion_matrix": wandb.plot.confusion_matrix(
+                    probs=None,
+                    y_true=true_labels,
+                    preds=predicted_labels,
+                    class_names=self.classes,
+                )
+            }
+        )
 
-        print('Eval loss: %.4f, Eval Accuracy: %.4f %%' % (np.mean(avg_loss) * 1.0, accuracy * 100.0))
+        print(
+            "Eval loss: %.4f, Eval Accuracy: %.4f %%"
+            % (np.mean(avg_loss) * 1.0, accuracy * 100.0)
+        )
         return np.mean(avg_loss), accuracy * 100.0
 
     def test_model(self):
@@ -215,13 +241,24 @@ class Trainer:
 
         pbar.close()
 
-        accuracy = torch.eq(torch.tensor(predicted_labels), torch.tensor(true_labels)).float().mean().item()
-        print('Test Accuracy: %.4f %%' % (accuracy * 100.0))
+        accuracy = (
+            torch.eq(torch.tensor(predicted_labels), torch.tensor(true_labels))
+            .float()
+            .mean()
+            .item()
+        )
+        print("Test Accuracy: %.4f %%" % (accuracy * 100.0))
 
-        wandb.log({"confusion_matrix": wandb.plot.confusion_matrix(probs=None,
-                                                                   y_true=true_labels,
-                                                                   preds=predicted_labels,
-                                                                   class_names=self.classes)})
+        wandb.log(
+            {
+                "confusion_matrix": wandb.plot.confusion_matrix(
+                    probs=None,
+                    y_true=true_labels,
+                    preds=predicted_labels,
+                    class_names=self.classes,
+                )
+            }
+        )
 
     def visualize_stn(self):
         self.model.eval()
@@ -238,29 +275,29 @@ class Trainer:
         grid = to_pil(torchvision.utils.make_grid(batch, nrow=16, padding=4))
         stn_batch = to_pil(torchvision.utils.make_grid(stn_batch, nrow=16, padding=4))
 
-        wandb.log({'batch': wandb.Image(grid), 'stn': wandb.Image(stn_batch)})
+        wandb.log({"batch": wandb.Image(grid), "stn": wandb.Image(stn_batch)})
 
     def save(self):
         data = {
-            'model': self.model.state_dict(),
-            'opt': self.optimizer.state_dict(),
-            'ema': self.ema.state_dict(),
-            'scaler': self.scaler.state_dict(),
-            'scheduler': self.scheduler.state_dict(),
-            'best_acc': self.best_val_accuracy,
+            "model": self.model.state_dict(),
+            "opt": self.optimizer.state_dict(),
+            "ema": self.ema.state_dict(),
+            "scaler": self.scaler.state_dict(),
+            "scheduler": self.scheduler.state_dict(),
+            "best_acc": self.best_val_accuracy,
         }
 
-        torch.save(data, str(self.output_directory / f'{self.execution_name}.pt'))
+        torch.save(data, str(self.output_directory / f"{self.execution_name}.pt"))
 
     def load(self, path):
         data = torch.load(path, map_location=self.device)
 
-        self.model.load_state_dict(data['model'])
-        self.optimizer.load_state_dict(data['opt'])
-        self.ema.load_state_dict(data['ema'])
-        self.scaler.load_state_dict(data['scaler'])
-        self.scheduler.load_state_dict(data['scheduler'])
-        self.best_val_accuracy = data['best_acc']
+        self.model.load_state_dict(data["model"])
+        self.optimizer.load_state_dict(data["opt"])
+        self.ema.load_state_dict(data["ema"])
+        self.scaler.load_state_dict(data["scaler"])
+        self.scheduler.load_state_dict(data["scheduler"])
+        self.best_val_accuracy = data["best_acc"]
 
 
 def plot_images():
@@ -274,34 +311,65 @@ def plot_images():
         for j in range(num_cols):
             index = i * num_cols + j  # Calculate the corresponding index in the dataset
             image, _ = train_dataset[index]  # Get the image
-            axes[i, j].imshow(image.permute(1, 2, 0))  # Convert tensor to PIL image format and plot
-            axes[i, j].axis('off')
+            axes[i, j].imshow(
+                image.permute(1, 2, 0)
+            )  # Convert tensor to PIL image format and plot
+            axes[i, j].axis("off")
 
     plt.tight_layout()
     plt.savefig("images.png")
     plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train EmoNeXt on Fer2013")
 
     parser.add_argument("--dataset-path", type=str, help="Path to the dataset")
-    parser.add_argument("--output-dir", type=str, default="out",
-                        help="Path where the best model will be saved")
-    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for training")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="out",
+        help="Path where the best model will be saved",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=20, help="Number of training epochs"
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=32, help="Batch size for training"
+    )
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
-    parser.add_argument('--amp', action='store_true', default=False, help='Enable mixed precision training')
-    parser.add_argument('--in_22k', action='store_true', default=False)
-    parser.add_argument('--gradient-accumulation-steps', type=int, default=1,
-                        help='Number of steps to accumulate gradients before updating the model weights')
-    parser.add_argument("--num-workers", type=int, default=0,
-                        help="The number of subprocesses to use for data loading."
-                             "0 means that the data will be loaded in the main process.")
-    parser.add_argument('--checkpoint', type=str, default=None,
-                        help='Path to the checkpoint file for resuming training or performing inference')
-    parser.add_argument('--model-size', choices=['tiny', 'small', 'base', 'large', 'xlarge'], default='tiny',
-                        help='Choose the size of the model: tiny, small, base, large, or xlarge')
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        default=False,
+        help="Enable mixed precision training",
+    )
+    parser.add_argument("--in_22k", action="store_true", default=False)
+    parser.add_argument(
+        "--gradient-accumulation-steps",
+        type=int,
+        default=1,
+        help="Number of steps to accumulate gradients before updating the model weights",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="The number of subprocesses to use for data loading."
+        "0 means that the data will be loaded in the main process.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default=None,
+        help="Path to the checkpoint file for resuming training or performing inference",
+    )
+    parser.add_argument(
+        "--model-size",
+        choices=["tiny", "small", "base", "large", "xlarge"],
+        default="tiny",
+        help="Choose the size of the model: tiny, small, base, large, or xlarge",
+    )
 
     opt = parser.parse_args()
     print(opt)
@@ -311,51 +379,63 @@ if __name__ == '__main__':
 
     wandb.init(project="EmoNeXt", name=exec_name, anonymous="must")
 
-    train_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.Grayscale(),
-        transforms.Resize(236),
-        transforms.RandomRotation(degrees=20),
-        transforms.RandomCrop(224),
-        transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.repeat(3, 1, 1))
-    ])
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.RandomRotation(degrees=20),
+            transforms.RandomCrop(224),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+        ]
+    )
 
-    val_transform = transforms.Compose([
-        transforms.Grayscale(),
-        transforms.Resize(236),
-        transforms.RandomCrop(224),
-        transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.repeat(3, 1, 1))
-    ])
+    val_transform = transforms.Compose(
+        [
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.RandomCrop(224),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+        ]
+    )
 
-    test_transform = transforms.Compose([
-        transforms.Grayscale(),
-        transforms.Resize(236),
-        transforms.TenCrop(224),
-        transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops])),
-        transforms.Lambda(lambda crops: torch.stack([crop.repeat(3, 1, 1) for crop in crops])),
-    ])
+    test_transform = transforms.Compose(
+        [
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.TenCrop(224),
+            transforms.Lambda(
+                lambda crops: torch.stack(
+                    [transforms.ToTensor()(crop) for crop in crops]
+                )
+            ),
+            transforms.Lambda(
+                lambda crops: torch.stack([crop.repeat(3, 1, 1) for crop in crops])
+            ),
+        ]
+    )
 
-    train_dataset = datasets.ImageFolder(opt.dataset_path + '/train', train_transform)
-    val_dataset = datasets.ImageFolder(opt.dataset_path + '/val', val_transform)
-    test_dataset = datasets.ImageFolder(opt.dataset_path + '/test', test_transform)
+    train_dataset = datasets.ImageFolder(opt.dataset_path + "/train", train_transform)
+    val_dataset = datasets.ImageFolder(opt.dataset_path + "/val", val_transform)
+    test_dataset = datasets.ImageFolder(opt.dataset_path + "/test", test_transform)
 
     print("Using %d images for training." % len(train_dataset))
     print("Using %d images for evaluation." % len(val_dataset))
     print("Using %d images for testing." % len(test_dataset))
 
-    train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True,
-                              num_workers=opt.num_workers)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=opt.batch_size,
+        shuffle=True,
+        num_workers=opt.num_workers,
+    )
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-    net = get_model(
-        len(train_dataset.classes),
-        opt.model_size,
-        in_22k=opt.in_22k
-    )
+    net = get_model(len(train_dataset.classes), opt.model_size, in_22k=opt.in_22k)
 
     Trainer(
         model=net,
@@ -368,5 +448,5 @@ if __name__ == '__main__':
         output_dir=opt.output_dir,
         checkpoint_path=opt.checkpoint,
         max_epochs=opt.epochs,
-        amp=opt.amp
+        amp=opt.amp,
     ).run()
